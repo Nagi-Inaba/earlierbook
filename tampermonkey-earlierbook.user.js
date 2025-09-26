@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EarlierBook Watcher (Tampermonkey)
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Monitor for earlier reservation slots and automatically reload between 43s and 53s of each minute.
 // @match        https://ticket.expo2025.or.jp/*
 // @run-at       document-end
