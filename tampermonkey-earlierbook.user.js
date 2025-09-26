@@ -62,8 +62,16 @@
     if (!target) return false;
     const anchor =
       target.closest?.("a[href]") ?? (target.tagName === "A" ? target : null);
-    if (!anchor) return false;
-    return shouldBlockUrl(anchor.href);
+    if (anchor && shouldBlockUrl(anchor.href)) return true;
+    const dataHolder =
+      target.closest?.("[data-href],[data-url],[data-link],[data-target-url]") ?? null;
+    if (!dataHolder) return false;
+    const attributes = ["data-href", "data-url", "data-link", "data-target-url"];
+    for (const attr of attributes) {
+      const value = dataHolder.getAttribute?.(attr);
+      if (value && shouldBlockUrl(value)) return true;
+    }
+    return false;
   }
 
 
@@ -166,7 +174,70 @@
     );
   }
 
+  function installLocationGuards() {
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        Location.prototype,
+        "href",
+      );
+      if (descriptor?.set) {
+        const originalSetter = descriptor.set;
+        Object.defineProperty(Location.prototype, "href", {
+          configurable: descriptor.configurable,
+          enumerable: descriptor.enumerable,
+          get: descriptor.get,
+          set(value) {
+            if (shouldBlockUrl(value)) {
+              console.warn(
+                "[EarlierBook] Blocked direct location.href navigation to Expo 2025 homepage",
+              );
+              return;
+            }
+            return originalSetter.call(this, value);
+          },
+        });
+      }
+    } catch (error) {
+      console.warn("[EarlierBook] Unable to guard location.href setter", error);
+    }
+
+    try {
+      const originalAssign = window.location.assign?.bind(window.location);
+      if (originalAssign) {
+        window.location.assign = function guardedAssign(url, ...rest) {
+          if (shouldBlockUrl(url)) {
+            console.warn(
+              "[EarlierBook] Blocked location.assign navigation to Expo 2025 homepage",
+            );
+            return undefined;
+          }
+          return originalAssign(url, ...rest);
+        };
+      }
+    } catch (error) {
+      console.warn("[EarlierBook] Unable to guard location.assign", error);
+    }
+
+    try {
+      const originalReplace = window.location.replace?.bind(window.location);
+      if (originalReplace) {
+        window.location.replace = function guardedReplace(url, ...rest) {
+          if (shouldBlockUrl(url)) {
+            console.warn(
+              "[EarlierBook] Blocked location.replace navigation to Expo 2025 homepage",
+            );
+            return undefined;
+          }
+          return originalReplace(url, ...rest);
+        };
+      }
+    } catch (error) {
+      console.warn("[EarlierBook] Unable to guard location.replace", error);
+    }
+  }
+
   installNavigationGuards();
+  installLocationGuards();
 
   const SELECTOR_TOGGLE = "div.style_buy__2YcAY:nth-of-type(1) > ul.buttons:nth-of-type(1) > li:nth-of-type(1) > a.basic-btn.type3:nth-of-type(1)";
   const SELECTOR_CLOSE_ICON = "div.ReactModal__Content.ReactModal__Content--after-open:nth-of-type(1) > div.style_modal__ZpsOM:nth-of-type(1) > a.style_close__lYrCO:nth-of-type(1)";
