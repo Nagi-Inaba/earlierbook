@@ -39,6 +39,21 @@
   const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const BLOCKED_NAVIGATION_HOSTNAMES = new Set(["www.expo2025.or.jp"]);
+
+  function shouldBlockNavigation(target) {
+    if (!target) return false;
+    const anchor =
+      target.closest?.("a[href]") ?? (target.tagName === "A" ? target : null);
+    if (!anchor) return false;
+    try {
+      const url = new URL(anchor.href, location.href);
+      return BLOCKED_NAVIGATION_HOSTNAMES.has(url.hostname);
+    } catch (error) {
+      console.warn("[EarlierBook] Failed to inspect navigation target", error);
+      return false;
+    }
+  }
 
   const hourToMinutes = (hour) => ({ 10: 600, 11: 660, 12: 720, 17: 1020 }[hour] ?? null);
   const minutesToHour = (minutes) => ({ 600: 10, 660: 11, 720: 12, 1020: 17 }[minutes] ?? "");
@@ -80,6 +95,12 @@
 
   async function clickWithDelay(target) {
     if (!target || isDisabled(target)) return false;
+    if (shouldBlockNavigation(target)) {
+      console.warn(
+        "[EarlierBook] Skipping blocked navigation to Expo 2025 homepage",
+      );
+      return false;
+    }
     await wait(500 + random(0, 1000));
     target.click?.();
     return true;
