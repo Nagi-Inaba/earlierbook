@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EarlierBook Watcher (Tampermonkey)
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Monitor for earlier reservation slots and automatically reload between 43s and 53s of each minute.
 // @match        https://ticket.expo2025.or.jp/*
 // @run-at       document-end
@@ -39,6 +39,7 @@
   const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
   const BLOCKED_NAVIGATION_HOSTNAMES = new Set([
     "www.expo2025.or.jp",
     "expo2025.or.jp",
@@ -48,12 +49,14 @@
     if (!urlLike) return false;
     try {
       const url = new URL(urlLike, location.href);
+
       return BLOCKED_NAVIGATION_HOSTNAMES.has(url.hostname);
     } catch (error) {
       console.warn("[EarlierBook] Failed to inspect navigation target", error);
       return false;
     }
   }
+
 
   function shouldBlockNavigation(target) {
     if (!target) return false;
@@ -62,6 +65,7 @@
     if (!anchor) return false;
     return shouldBlockUrl(anchor.href);
   }
+
 
   const hourToMinutes = (hour) => ({ 10: 600, 11: 660, 12: 720, 17: 1020 }[hour] ?? null);
   const minutesToHour = (minutes) => ({ 600: 10, 660: 11, 720: 12, 1020: 17 }[minutes] ?? "");
