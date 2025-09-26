@@ -39,6 +39,29 @@
   const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const BLOCKED_NAVIGATION_HOSTNAMES = new Set([
+    "www.expo2025.or.jp",
+    "expo2025.or.jp",
+  ]);
+
+  function shouldBlockUrl(urlLike) {
+    if (!urlLike) return false;
+    try {
+      const url = new URL(urlLike, location.href);
+      return BLOCKED_NAVIGATION_HOSTNAMES.has(url.hostname);
+    } catch (error) {
+      console.warn("[EarlierBook] Failed to inspect navigation target", error);
+      return false;
+    }
+  }
+
+  function shouldBlockNavigation(target) {
+    if (!target) return false;
+    const anchor =
+      target.closest?.("a[href]") ?? (target.tagName === "A" ? target : null);
+    if (!anchor) return false;
+    return shouldBlockUrl(anchor.href);
+  }
 
   const hourToMinutes = (hour) => ({ 10: 600, 11: 660, 12: 720, 17: 1020 }[hour] ?? null);
   const minutesToHour = (minutes) => ({ 600: 10, 660: 11, 720: 12, 1020: 17 }[minutes] ?? "");
@@ -80,10 +103,66 @@
 
   async function clickWithDelay(target) {
     if (!target || isDisabled(target)) return false;
+    if (shouldBlockNavigation(target)) {
+      console.warn(
+        "[EarlierBook] Skipping blocked navigation to Expo 2025 homepage",
+      );
+      return false;
+    }
     await wait(500 + random(0, 1000));
     target.click?.();
     return true;
   }
+
+  function installNavigationGuards() {
+    try {
+      const originalWindowOpen = window.open?.bind(window) || null;
+      window.open = function windowOpenGuard(url, ...rest) {
+        if (shouldBlockUrl(url)) {
+          console.warn(
+            "[EarlierBook] Blocked window.open navigation to Expo 2025 homepage",
+          );
+          return null;
+        }
+        if (!originalWindowOpen) return null;
+        return originalWindowOpen(url, ...rest);
+      };
+    } catch (error) {
+      console.warn("[EarlierBook] Unable to patch window.open", error);
+    }
+
+    try {
+      const { click: originalAnchorClick } = HTMLAnchorElement.prototype;
+      HTMLAnchorElement.prototype.click = function guardedAnchorClick(...args) {
+        if (shouldBlockNavigation(this)) {
+          console.warn(
+            "[EarlierBook] Blocked anchor click navigation to Expo 2025 homepage",
+          );
+          return undefined;
+        }
+        return originalAnchorClick.apply(this, args);
+      };
+    } catch (error) {
+      console.warn("[EarlierBook] Unable to patch anchor.click", error);
+    }
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (shouldBlockNavigation(event.target)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          event.stopPropagation();
+          console.warn(
+            "[EarlierBook] Blocked user click navigation to Expo 2025 homepage",
+          );
+        }
+      },
+      true,
+    );
+  }
+
+  installNavigationGuards();
 
   const SELECTOR_TOGGLE = "div.style_buy__2YcAY:nth-of-type(1) > ul.buttons:nth-of-type(1) > li:nth-of-type(1) > a.basic-btn.type3:nth-of-type(1)";
   const SELECTOR_CLOSE_ICON = "div.ReactModal__Content.ReactModal__Content--after-open:nth-of-type(1) > div.style_modal__ZpsOM:nth-of-type(1) > a.style_close__lYrCO:nth-of-type(1)";
