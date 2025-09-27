@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EarlierBook Watcher (Tampermonkey)
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Monitor for earlier reservation slots and automatically reload between 43s and 53s of each minute.
 // @match        https://ticket.expo2025.or.jp/*
 // @run-at       document-end
@@ -91,11 +91,16 @@
     }
   };
 
-  async function waitButton({ sel, txt, timeout = 10_000, interval = 200 } = {}) {
+  async function waitButton({
+    sel,
+    txt,
+    timeout = 10_000,
+    interval = 200,
+    observe = false,
+  } = {}) {
     const start = Date.now();
-    for (;;) {
-      if (Date.now() - start > timeout) return null;
 
+    const findCandidate = () => {
       if (sel) {
         const found = $(sel);
         if (found && !isDisabled(found)) return found;
@@ -109,6 +114,62 @@
         if (found) return found;
       }
 
+      return null;
+    };
+
+    if (observe && typeof MutationObserver === "function") {
+      return await new Promise((resolve) => {
+        let resolved = false;
+        let observer = null;
+
+        const cleanup = () => {
+          resolved = true;
+          try {
+            observer?.disconnect();
+          } catch (error) {
+            console.warn("[EarlierBook] Unable to disconnect observer", error);
+          }
+        };
+
+        const target = document.body || document.documentElement;
+        if (target) {
+          try {
+            observer = new MutationObserver(() => {
+              const candidate = findCandidate();
+              if (!candidate) return;
+              cleanup();
+              resolve(candidate);
+            });
+            observer.observe(target, { childList: true, subtree: true });
+          } catch (error) {
+            console.warn("[EarlierBook] Unable to observe button appearance", error);
+          }
+        }
+
+        (async function poll() {
+          for (;;) {
+            if (resolved) return;
+            if (Date.now() - start > timeout) {
+              cleanup();
+              resolve(null);
+              return;
+            }
+            const candidate = findCandidate();
+            if (candidate) {
+              cleanup();
+              resolve(candidate);
+              return;
+            }
+            await wait(interval);
+          }
+        })();
+      });
+    }
+
+    for (;;) {
+      if (Date.now() - start > timeout) return null;
+      const candidate = findCandidate();
+      if (candidate) return candidate;
       await wait(interval);
     }
   }
@@ -606,13 +667,23 @@
   }
 
   async function runReservationFlow() {
-    let button = await waitButton({ sel: "button.basic-btn.type2.style_full__ptzZq", txt: /来場日時を設定する/, timeout: 8_000 });
+    let button = await waitButton({
+      sel: "button.basic-btn.type2.style_full__ptzZq",
+      txt: /来場日時を設定する/,
+      timeout: 8_000,
+      observe: true,
+    });
     if (!button) return "retry";
     await clickWithDelay(button);
 
     await waitButton({ txt: /確認|来場日時|交通|手段/, timeout: 5_000, interval: 150 });
 
-    button = await waitButton({ sel: "button.style_next_button__N_pbs", txt: /来場日時を変更する/, timeout: 10_000 });
+    button = await waitButton({
+      sel: "button.style_next_button__N_pbs",
+      txt: /来場日時を変更する/,
+      timeout: 10_000,
+      observe: true,
+    });
     if (!button) return "retry";
     await clickWithDelay(button);
 
