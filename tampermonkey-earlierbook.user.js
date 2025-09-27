@@ -610,11 +610,17 @@
     if (!button) return "retry";
     await clickWithDelay(button);
 
-    await waitButton({ txt: /確認|来場日時|交通|手段/, timeout: 5_000, interval: 150 });
+    button = await waitButton({
+      sel: "button.style_next_button__N_pbs",
+      txt: /来場日時を変更する/,
+      timeout: 4_000,
+      interval: 150,
+    });
+    if (button) {
+      await clickWithDelay(button);
+    }
 
-    button = await waitButton({ sel: "button.style_next_button__N_pbs", txt: /来場日時を変更する/, timeout: 10_000 });
-    if (!button) return "retry";
-    await clickWithDelay(button);
+    await waitButton({ txt: /確認|来場日時|交通|手段/, timeout: 5_000, interval: 150 });
 
     const start = Date.now();
     for (;;) {
